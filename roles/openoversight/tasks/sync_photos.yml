@@ -1,0 +1,50 @@
+---
+- name: Create OpenOversight photo sync directory
+  become: true
+  file:
+    state: directory
+    path: "{{ environ.backup_dir }}/photos"
+    owner: "{{ openoversight_user }}"
+    group: "{{ openoversight_user }}"
+
+- name: Create AWS config directory
+  file:
+    state: directory
+    path: "{{ environ.path }}/aws"
+
+- name: Add AWS configuration file
+  copy:
+    dest: "{{ environ.path }}/aws/config"
+    mode: 0600
+    content: |
+      [default]
+      region={{ aws_default_region }}
+
+- name: Add AWS credentials file
+  copy:
+    dest: "{{ environ.path }}/aws/credentials"
+    mode: 0600
+    content: |
+      [default]
+      aws_access_key_id = {{ aws_access_key_id }}
+      aws_secret_access_key = {{ aws_secret_access_key }}
+
+- name: Add photo sync script
+  copy:
+    dest: "{{ environ.path }}/photo_sync.sh"
+    mode: 0755
+    content: |
+      #!/bin/sh
+      cd {{ environ.path }}/OpenOversight
+      echo [+ Syncing photos +]
+      docker run --rm -it -v {{ environ.path }}/aws:/root/.aws -v {{ environ.backup_dir }}/photos:/photos amazon/aws-cli s3 sync s3://{{ environ.s3_bucket }} /photos
+      echo [+ Done +]
+
+- name: Create cron job for photo sync
+  cron:
+    name: "openoversight-{{ environ.name }}-photo-sync"
+    minute: "{{ openoversight_backup_minute | default('0') }}"
+    hour: "{{ openoversight_backup_hour | default('2') }}"
+    weekday: "{{ openoversight_backup_weekday | default('0') }}"
+    job: "{{ environ.path }}/photo_sync.sh"
+    user: "{{ openoversight_user }}"

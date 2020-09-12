@@ -1,0 +1,143 @@
+---
+- name: Create OpenOversight directory
+  become: true
+  file:
+    state: directory
+    path: "{{ environ.path }}"
+    owner: "{{ openoversight_user }}"
+    group: "{{ openoversight_user }}"
+
+- name: Checkout OpenOversight git repo
+  git:
+    repo: "{{ openoversight_git_repo }}"
+    dest: "{{ environ.path }}/OpenOversight"
+    version: "{{ environ.git_version }}"
+    update: yes
+
+- name: Build OpenOversight Docker image
+  docker_image:
+    state: present
+    build:
+      args:
+        DOCKER_BUILD_ENV: production
+      dockerfile: "{{ environ.path }}/OpenOversight/dockerfiles/web/Dockerfile"
+      path: "{{ environ.path }}/OpenOversight"
+      pull: yes
+    force_source: yes
+    name: "openoversight-{{ environ.name }}:latest"
+    source: build
+
+- name: Create OpenOversight database volume
+  docker_volume:
+    driver: local
+    recreate: never
+    state: present
+    volume_name: "openoversight-db-{{ environ.name }}"
+
+- name: Create OpenOversight Docker network
+  docker_network:
+    name: openoversight
+    driver: bridge
+
+- name: Create Traefik Docker network
+  when: environ.traefik_enabled
+  docker_network:
+    name: traefik
+    driver: bridge
+
+- name: Create OpenOversight database backup directory
+  when: environ.backup_dir is defined
+  become: true
+  file:
+    state: directory
+    path: "{{ environ.backup_dir }}/db"
+    owner: "{{ openoversight_user }}"
+    group: "{{ openoversight_user }}"
+
+- when: environ.backup_dir is defined
+  set_fact:
+    database_mounts:
+      - source: "openoversight-db-{{ environ.name }}"
+        target: /var/lib/postgresql/data
+      - source: "{{ environ.backup_dir }}/db"
+        target: /backup
+        type: bind
+
+- when: environ.backup_dir is not defined
+  set_fact:
+    database_mounts:
+      - source: "openoversight-db-{{ environ.name }}"
+        target: /var/lib/postgresql/data
+
+- name: Create OpenOversight database container
+  docker_container:
+    name: "openoversight-db-{{ environ.name }}"
+    hostname: "postgres-{{ environ.name }}"
+    image: "postgres:{{ openoversight_postgres_version | default('latest') }}"
+    env:
+      POSTGRES_DB: "{{ openoversight_db_name }}"
+      POSTGRES_USER: "{{ openoversight_db_user }}"
+      POSTGRES_PASSWORD: "{{ openoversight_db_password }}"
+    labels:
+      traefik.enable: 'false'
+    mounts: "{{ database_mounts }}"
+    network_mode: bridge
+    networks:
+      - name: openoversight
+    state: started
+    restart_policy: unless-stopped
+    pull: yes
+    networks_cli_compatible: yes
+
+- when: environ.traefik_enabled
+  set_fact:
+    app_networks:
+      - name: openoversight
+      - name: traefik
+
+- when: not environ.traefik_enabled
+  set_fact:
+    app_networks:
+      - name: openoversight
+
+- name: Create OpenOversight app container
+  docker_container:
+    name: "openoversight-{{ environ.name }}"
+    image: "openoversight-{{ environ.name }}:latest"
+    mounts:
+      - source: "{{ environ.path }}/OpenOversight/OpenOversight"
+        target: /usr/src/app/OpenOversight
+        type: bind
+        read_only: no
+    network_mode: bridge
+    networks: "{{ app_networks }}"
+    published_ports:
+      - "{{ environ.internal_port }}:3000"
+    state: started
+    restart: yes
+    restart_policy: unless-stopped
+    networks_cli_compatible: yes
+    env:
+      AWS_ACCESS_KEY_ID: "{{ aws_access_key_id }}"
+      AWS_SECRET_ACCESS_KEY: "{{ aws_secret_access_key }}"
+      AWS_DEFAULT_REGION: "{{ aws_default_region }}"
+      S3_BUCKET_NAME: "{{ environ.s3_bucket }}"
+      APPROVE_REGISTRATIONS: "{{ 'true' if environ.approve_registrations else '' }}"
+      DISABLE_REGISTRATION: "{{ 'true' if environ.disable_registration else '' }}"
+      FLASK_APP: app
+      FLASK_ENV: production
+      SQLALCHEMY_DATABASE_URI: "postgresql://{{ openoversight_db_user }}:{{ openoversight_db_password }}@postgres-{{ environ.name}}/{{ openoversight_db_name }}"
+      SECRET_KEY: "{{ openoversight_secret_key }}"
+      RECAPTCHA_V3_SITE_KEY: "{{ recaptcha_v3_site_key | default('') }}"
+      RECAPTCHA_V3_SECRET_KEY: "{{ recaptcha_v3_secret_key | default('') }}"
+      RECAPTCHA_V3_THRESHOLD: "{{ recaptcha_v3_threshold | default('0.5') }}"
+      MAIL_SERVER: "{{ openoversight_mail_server }}"
+      MAIL_USERNAME: "{{ openoversight_mail_username }}"
+      MAIL_PASSWORD: "{{ openoversight_mail_password }}"
+      OO_MAIL_SUBJECT_PREFIX: "{{ openoversight_mail_subject_prefix | default('[OpenOversight]') }}"
+      OO_MAIL_SENDER: "{{ openoversight_mail_sender | default('OpenOversight <OpenOversight@gmail.com>') }}"
+    labels: |
+      {
+        "traefik.enable": "true",
+        "traefik.http.routers.openoversight-{{ environ.name }}.rule": "Host(`{{ environ.domain }}`)"
+      }

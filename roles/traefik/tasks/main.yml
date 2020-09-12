@@ -1,0 +1,98 @@
+---
+- name: Create Traefik directory
+  become: true
+  file:
+    path: "{{ traefik_dir }}"
+    state: directory
+    owner: "{{ traefik_user }}"
+    group: "{{ traefik_user }}"
+
+- name: Create Let's Encrypt directory
+  become: true
+  file:
+    path: "{{ traefik_dir }}/letsencrypt"
+    state: directory
+    owner: "{{ traefik_user }}"
+    group: "{{ traefik_user }}"
+
+- name: Copy Traefik config
+  copy:
+    dest: "{{ traefik_dir }}/traefik.yml"
+    content: |
+      providers:
+        docker:
+          exposedByDefault: false
+          endpoint: tcp://socket-proxy:2375
+          network: traefik
+      entryPoints:
+        web:
+          address: :80
+          http:
+            redirections:
+              entryPoint:
+                to: websecure
+                scheme: https
+        websecure:
+          address: :443
+          http:
+            tls:
+              certResolver: leresolver
+      certificatesResolvers:
+        leresolver:
+          acme:
+            email: {{ traefik_email }}
+            storage: /letsencrypt/acme.json
+            tlsChallenge: {}
+
+- name: Create Traefik Docker network
+  docker_network:
+    name: traefik
+    driver: bridge
+
+- name: Create Docker socket proxy network
+  docker_network:
+    name: socket-proxy
+    driver: bridge
+
+- name: Create Docker socket proxy
+  docker_container:
+    name: socket-proxy
+    hostname: socket-proxy
+    image: tecnativa/docker-socket-proxy
+    env:
+      CONTAINERS: '1'
+    mounts:
+      - source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: yes
+        type: bind
+    network_mode: bridge
+    networks:
+      - name: socket-proxy
+    purge_networks: yes
+    state: started
+    restart_policy: unless-stopped
+    networks_cli_compatible: yes
+
+- name: Create Traefik container
+  docker_container:
+    name: traefik
+    image: "traefik:{{ traefik_version }}"
+    mounts:
+      - source: "{{ traefik_dir }}/letsencrypt"
+        target: /letsencrypt
+        type: bind
+      - source: "{{ traefik_dir }}/traefik.yml"
+        target: /etc/traefik/traefik.yml
+        read_only: yes
+        type: bind
+    network_mode: bridge
+    networks:
+      - name: socket-proxy
+      - name: traefik
+    state: started
+    restart_policy: unless-stopped
+    published_ports:
+      - 80:80
+      - 443:443
+    networks_cli_compatible: yes

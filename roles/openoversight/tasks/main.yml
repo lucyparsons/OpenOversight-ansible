@@ -1,0 +1,17 @@
+---
+- include_tasks: application.yml
+  loop: "{{ openoversight_environments }}"
+  vars:
+    environ: "{{ item }}"
+
+- include_tasks: backup.yml
+  when: environ.backup_dir is defined
+  loop: "{{ openoversight_environments }}"
+  vars:
+    environ: "{{ item }}"
+
+- include_tasks: sync_photos.yml
+  when: environ.backup_dir is defined and environ.sync_photos
+  loop: "{{ openoversight_environments }}"
+  vars:
+    environ: "{{ item }}"

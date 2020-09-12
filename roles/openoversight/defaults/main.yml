@@ -1,0 +1,36 @@
+---
+openoversight_user: ubuntu
+openoversight_git_repo: https://github.com/lucyparsons/OpenOversight.git
+openoversight_db_name: openoversight-prod
+openoversight_db_user: openoversight
+openoversight_db_password: terriblepassword
+openoversight_postgres_version: 12
+openoversight_secret_key: 4Q6ZaQQdiqtmvZaxP1If
+openoversight_mail_server: smtp.gmail.com
+openoversight_mail_username: mail_username
+openoversight_mail_password: mail_password
+openoversight_environments:
+  - name: production
+    path: /usr/src/openoversight/production
+    domain: openoversight.com
+    git_version: main
+    s3_bucket: openoversight-photos
+    approve_registrations: false
+    disable_registration: false
+    internal_port: 3000
+    sync_photos: yes
+    traefik_enabled: yes
+    backup_dir: /var/backups/openoversight
+  - name: staging
+    path: /usr/src/openoversight/staging
+    domain: staging.openoversight.com
+    git_version: develop
+    s3_bucket: openoversight-photos-staging
+    approve_registrations: false
+    disable_registration: false
+    internal_port: 3001
+    sync_photos: no
+    traefik_enabled: yes
+aws_secret_access_key: my_aws_secret_access_key
+aws_access_key_id: my_aws_access_key_id
+aws_default_region: us-east-1

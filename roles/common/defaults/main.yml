@@ -1,0 +1,7 @@
+---
+common_packages:
+  - sudo
+  - git
+openoversight_user: ubuntu
+openoversight_password: $5$k90iYj3.mL3HYivL$gGoFuYkChipnjXTHC.IsXhcJR2LR4K9HYv3NkCIlgKC
+openoversight_user_home_dir: /home/ubuntu

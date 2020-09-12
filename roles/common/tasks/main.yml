@@ -1,0 +1,17 @@
+---
+- name: install common packages
+  apt:
+    name: "{{ common_packages }}"
+    state: present
+    update_cache: yes
+
+- name: add unprivileged user, put in sudo and docker groups
+  user:
+    name: "{{ openoversight_user }}"
+    password: "{{ openoversight_password }}"
+    groups:
+      - sudo
+      - docker
+    append: yes
+    shell: /bin/bash
+    home: "{{ openoversight_user_home_dir }}"

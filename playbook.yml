@@ -1,0 +1,30 @@
+# Install Docker
+- hosts: all
+  become: true
+  tags:
+    - never
+    - docker
+  vars:
+    pip_install_packages:
+      - name: docker
+  roles:
+    - geerlingguy.pip
+    - geerlingguy.docker
+
+# Common setup
+- hosts: all
+  become: true
+  roles:
+    - common
+
+# Install OpenOversight for each environment
+- hosts: all
+  tags: [ application ]
+  roles:
+    - openoversight
+
+# Install Traefik
+- hosts: all
+  tags: [ traefik ]
+  roles:
+    - traefik

@@ -1,0 +1,12 @@
+#!/bin/sh
+DATE_STR=$(date +\%Y\%m\%d-\%H\%M\%S)
+BACKUP_FILENAME={{ environ.domain }}_$DATE_STR.sql
+cd {{ environ.path }}/OpenOversight
+echo [+ Exporting database +]
+docker exec openoversight-db-{{ environ.name }} pg_dump postgresql://{{ openoversight_db_user }}:{{ openoversight_db_password }}@localhost/{{ openoversight_db_name }} -f /backup/${BACKUP_FILENAME}
+gzip {{ environ.backup_dir }}/db/${BACKUP_FILENAME}
+{% if environ.backup_s3_bucket is defined %}
+echo [+ Sending database backup to s3 +]
+docker run --rm -it -v {{ environ.path }}/aws:/root/.aws -v {{ environ.backup_dir }}/db:/backup amazon/aws-cli s3 cp /backup/${BACKUP_FILENAME}.gz s3://{{ environ.backup_s3_bucket }}/${BACKUP_FILENAME}.gz
+{% endif %}
+echo [+ Done +]

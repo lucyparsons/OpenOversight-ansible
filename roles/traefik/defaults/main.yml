@@ -1,0 +1,4 @@
+traefik_user: ubuntu
+traefik_dir: /etc/traefik
+traefik_email: postmaster@openoversight.com
+traefik_version: v2.2

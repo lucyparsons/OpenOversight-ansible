@@ -1,0 +1,15 @@
+---
+- name: Copy backup script
+  template:
+    src: backup.sh.j2
+    dest: "{{ environ.path }}/backup.sh"
+    mode: 0755
+
+- name: Create cron job for database backup
+  cron:
+    name: "openoversight-{environ.name}-db-backup"
+    minute: "{{ openoversight_backup_minute | default('0') }}"
+    hour: "{{ openoversight_backup_hour | default('2') }}"
+    weekday: "{{ openoversight_backup_weekday | default('0') }}"
+    job: "{{ environ.path }}/backup.sh"
+    user: "{{ openoversight_user }}"
